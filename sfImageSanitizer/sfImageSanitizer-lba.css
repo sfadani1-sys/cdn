@@ -1,0 +1,54 @@
+.sf-image-sanitizer-lba {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    text-align: center;
+}
+
+.sf-image-input {
+    margin-bottom: 20px;
+}
+
+.sf-image-input label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+#sf-image-drop-area {
+    border: 2px dashed #ccc;
+    padding: 20px;
+    cursor: pointer;
+}
+
+#sf-image-upload {
+    display: none;
+}
+
+.sf-message-input {
+    margin-bottom: 20px;
+}
+
+.sf-message-input label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+#sf-message {
+    width: 300px;
+    height: 100px;
+}
+
+.sf-image-output {
+    display: flex;
+    justify-content: space-around;
+}
+
+.sf-image-output div {
+    text-align: center;
+}
+
+.sf-image-output img,
+.sf-image-output canvas {
+    max-width: 400px;
+    max-height: 300px;
+    border: 1px solid #ccc;
+}

@@ -1,0 +1,111 @@
+<!-- 파일이름: sfImageSanitizer.html -->
+<!DOCTYPE html>
+<!-- HTML5 문서 유형을 선언합니다. -->
+<html lang="ko">
+<!-- 문서의 주 언어가 한국어임을 명시합니다. -->
+<head>
+    <!-- 문서의 메타데이터를 담는 영역입니다. -->
+    
+    <meta charset="UTF-8">
+    <!-- 문자 인코딩을 UTF-8로 설정하여 한글 깨짐을 방지합니다. -->
+         
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 모바일 기기에서의 반응형 웹사이트를 위한 뷰포트 설정입니다. -->
+         
+    <title>sfImageSanitizer</title>
+    <!-- 브라우저 탭에 표시될 문서의 제목입니다. -->
+
+    <!-- ==========================================================================
+       외부 리소스(폰트 및 스타일시트) 로드
+       ========================================================================== -->
+    
+    <!-- 1. D2Coding 코딩 폰트를 CDN을 통해 불러옵니다. -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/gh/wan2land/d2coding/d2coding-full.css" />
+    
+    <!-- 2. Google Material Icons 폰트를 불러와 아이콘을 사용합니다. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    
+    <!-- 3. 이 애플리케이션의 메인 CSS 스타일 시트를 연결합니다. -->
+    <link rel="stylesheet" href="sfImageSanitizer.css">
+</head>
+<body>
+    <!-- 사용자에게 실제로 보여지는 모든 콘텐츠를 담는 영역입니다. -->
+
+    <!-- ==========================================================================
+       애플리케이션 UI 컨테이너
+       ========================================================================== -->
+
+    <!-- 
+      애플리케이션의 메인 UI 영역입니다.
+      JavaScript(sfImageSanitizerUI.js)가 이곳을 찾아 동적으로
+      드래그 앤 드롭 UI를 생성하고 삽입합니다.
+    -->
+    <div id="sfImageSanitizer-container"></div>
+
+    <!-- 
+      [신규 추가]
+      분석된 파일들의 결과가 순차적으로 추가될 별도의 컨테이너입니다.
+      JavaScript(sfImageSanitizerUI.js)가 각 파일 분석이 시작될 때마다
+      이곳에 새로운 결과 항목(div.sfImageSanitizer-result-item)을 생성하여 추가합니다.
+      이 구조를 통해 각 파일의 처리 과정을 독립적으로 보여줄 수 있습니다.
+    -->
+    <div id="sfImageSanitizer-results-container"></div>
+
+
+    <!-- ==========================================================================
+       JavaScript 파일 로드 (의존성 순서가 매우 중요합니다)
+       ========================================================================== -->
+
+    <!-- 1. 의존성이 없는 순수 유틸리티부터 로드합니다. -->
+    <script src="sfFileFormatValidator.js"></script>
+    
+    <!-- 2. 'Validator'를 사용하는 분석기를 로드합니다. -->
+    <script src="sfFileFormatAnalyzer.js"></script>
+    
+    <!-- 3. 독립적인 로깅 모듈을 로드합니다. -->
+    <script src="sfImageSanitizerLog.js"></script>
+    
+    <!-- 4. UI 제어 모듈을 로드합니다. -->
+    <script src="sfImageSanitizerUI.js"></script>
+    
+    <!-- 5. 위 모든 모듈을 조율하는 메인 로직을 가장 마지막에 로드합니다. -->
+    <script src="sfImageSanitizer.js"></script>
+
+    <!-- ==========================================================================
+       애플리케이션 실행 스크립트 (부트스트래핑)
+       ========================================================================== -->
+    <script>
+        // DOM 콘텐츠가 모두 로드된 후 스크립트를 안전하게 실행합니다.
+        document.addEventListener('DOMContentLoaded', () => {
+        
+            // 애플리케이션 전체 설정을 위한 단일 객체입니다.
+            const appOptions = {
+                ui: {
+                    // [수정됨] 드래그 앤 드롭 UI가 생성될 메인 컨테이너의 ID를 명시적으로 지정합니다.
+                    mainContainerId: '#sfImageSanitizer-container',
+                    
+                    // [신규 추가] 분석 결과 목록이 표시될 결과 컨테이너의 ID를 지정합니다.
+                    resultsContainerId: '#sfImageSanitizer-results-container',
+                    
+                    // [수정됨] 아래에 결과 표시 영역이 새로 생겼으므로, 드롭 존의 높이를 적절히 조절하여
+                    // 전체적인 화면 균형을 맞춥니다.
+                    dropZoneHeight: '250px',
+                    
+                    // 로그 타이핑 효과 속도입니다.
+                    typingSpeed: 1
+                },
+                logic: {
+                    // 개발자용 상세 로그를 표시할지 여부를 설정합니다.
+                    debugMode: true 
+                }
+            };
+
+            // 설정 객체를 전달하여 UI 인스턴스를 생성합니다.
+            const ui = new sfImageSanitizerUI(appOptions);
+            
+            // UI 인스턴스와 설정 객체를 전달하여 메인 로직 인스턴스를 생성하고 애플리케이션을 실행합니다.
+            new sfImageSanitizer(ui, appOptions);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSB 이미지 스테가노그래피</title>
+    <link rel="stylesheet" href="sfImageSanitizer-lba.css">
+</head>
+<body>
+    <div id="sf-image-sanitizer-lba" class="sf-image-sanitizer-lba">
+        <h1>LSB 이미지 스테가노그래피</h1>
+        <div class="sf-image-input">
+            <label for="sf-image-upload">이미지 선택 또는 드래그 앤 드롭</label>
+            <input type="file" id="sf-image-upload" accept="image/*">
+            <div id="sf-image-drop-area">
+                여기에 이미지를 드래그 앤 드롭하세요.
+            </div>
+        </div>
+        <div class="sf-message-input">
+            <label for="sf-message">숨길 메시지:</label>
+            <textarea id="sf-message" placeholder="숨길 메시지를 입력하세요."></textarea>
+        </div>
+        <button id="sf-embed-button" disabled>LSB 삽입</button>
+        <div class="sf-image-output">
+            <div class="sf-original-image">
+                <h2>원본 이미지</h2>
+                <img id="sf-original-image" src="#" alt="원본 이미지">
+            </div>
+            <div class="sf-embedded-image">
+                <h2>삽입된 이미지</h2>
+                <canvas id="sf-embedded-image"></canvas>
+            </div>
+        </div>
+    </div>
+    <script src="sfImageSanitizer-lba.js"></script>
+</body>
+</html>

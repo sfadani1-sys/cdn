@@ -1,0 +1,261 @@
+/* 파일이름: sfImageSanitizer.css */
+
+/* ==========================================================================
+   1. 전역 및 기본 스타일 (Global & Base Styles)
+   ========================================================================== */
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: 'D2Coding', monospace;
+    /* [수정됨] 전체 페이지의 배경색을 어둡게 설정하여 일관된 테마를 제공합니다. */
+    background-color: #212529; 
+    color: #e0e0e0;
+}
+
+/* ==========================================================================
+   2. 메인 컨테이너 레이아웃 (Main Container Layout)
+   ========================================================================== */
+
+#sfImageSanitizer-container {
+    width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* ==========================================================================
+   3. 드래그 앤 드롭 영역 (Drop Zone)
+   ========================================================================== */
+
+.sfImageSanitizer-drop-zone {
+    width: 100%;
+    height: 100%; /* 이 높이는 JS 옵션(dropZoneHeight)으로 덮어쓰입니다. */
+    border: 3px dashed #555; /* 어두운 테마에 맞게 테두리 색상 조정 */
+    border-radius: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: #888888;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    background-color: #1a1a1a; /* 어두운 테마에 맞게 배경색 조정 */
+    position: relative;
+    overflow: hidden;
+}
+
+.sfImageSanitizer-drop-zone.drag-over {
+    border-color: #007bff;
+    color: #007bff;
+    background-color: #2a2f34;
+}
+
+.sfImageSanitizer-prompt-message .material-icons {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+.sfImageSanitizer-file-input {
+    display: none;
+}
+
+/* ==========================================================================
+   [신규] 4. 결과 영역 스타일 (Results Area Styles)
+   ========================================================================== */
+
+#sfImageSanitizer-results-container {
+    padding: 0 20px 20px 20px; /* 드롭존과의 간격 및 좌우 패딩 */
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* 각 결과 항목(카드) 사이의 간격 */
+}
+
+/* 각 파일의 결과를 나타내는 카드 스타일 */
+.sfImageSanitizer-result-item {
+    display: flex; /* 섬네일과 정보 영역을 가로로 배치 */
+    gap: 15px;
+    background-color: #1a1a1a;
+    border: 3px solid #555; /* 기본 테두리 색상 */
+    border-radius: 15px;
+    padding: 15px;
+    transition: border-color 0.3s ease-in-out;
+}
+
+/* 분석 결과에 따른 테두리 색상 변경 */
+.sfImageSanitizer-result-item.success {
+    border-color: #28a745;
+}
+.sfImageSanitizer-result-item.error {
+    border-color: #dc3545;
+}
+
+/* 섬네일 영역 스타일 */
+.result-thumbnail {
+    width: 120px;
+    height: 120px;
+    flex-shrink: 0; /* 컨테이너 너비가 줄어들어도 섬네일 크기는 고정 */
+    background-color: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 섬네일 이미지 스타일 */
+.result-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* 이미지가 비율을 유지하며 영역을 꽉 채우도록 설정 */
+}
+
+/* 정보 영역(헤더, 프로그레스 바, 로그 등)을 감싸는 컨테이너 */
+.result-info-area {
+    flex-grow: 1; /* 섬네일을 제외한 모든 남은 가로 공간을 차지 */
+    min-width: 0; /* Flexbox 레이아웃에서 내용이 넘치는 것을 방지하는 트릭 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* ==========================================================================
+   [수정] 5. 개별 결과 항목 내부의 UI 컴포넌트 스타일
+   - 기존의 전체 화면 뷰 스타일을 각 카드 내부에 맞게 조정합니다.
+   ========================================================================== */
+
+.sfImageSanitizer-progress-header {
+    width: 100%;
+    font-size: 1em;
+    padding: 0 0 10px 0; /* 카드 내부에 맞게 패딩 조정 */
+    margin-bottom: 5px; /* 프로그레스 바와의 간격 조정 */
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-shrink: 0;
+}
+
+.sfImageSanitizer-progress-header .file-name {
+    color: #00ff00;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* 긴 파일 이름은 ...으로 표시 */
+}
+
+.sfImageSanitizer-progress-header .file-info {
+    color: #aaa;
+    flex-shrink: 0;
+    padding-left: 15px;
+}
+
+.sfImageSanitizer-progress-bar {
+    width: 100%; /* 카드 내부에 꽉 차도록 설정 */
+    margin: 0 0 15px 0; /* 좌우 마진 제거, 하단 마진 추가 */
+    height: 8px;
+    background-color: #333;
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.sfImageSanitizer-progress-bar-fill {
+    width: 0%;
+    height: 100%;
+    background-color: #00ff00;
+    border-radius: 4px;
+    transition: width 0.1s linear;
+}
+
+.sfImageSanitizer-content-area {
+    flex-grow: 1; /* 정보 영역 내에서 헤더와 바를 제외한 모든 공간 차지 */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0; /* 카드 자체에 패딩이 있으므로 제거 */
+}
+
+.sfImageSanitizer-status-log {
+    flex-grow: 0; /* 단일 라인이므로 공간을 차지하지 않음 */
+    padding: 10px 15px; /* 패딩 약간 조정 */
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+    text-align: left;
+    font-size: 0.85em;
+    line-height: 1.6;
+    margin: 0 0 15px 0;
+}
+
+.sfImageSanitizer-status-log p {
+    margin: 0;
+    animation: fadeIn 0.3s ease;
+}
+
+.sfImageSanitizer-status-log .log-info { color: #e0e0e0; }
+.sfImageSanitizer-status-log .log-success { color: #28a745; }
+.sfImageSanitizer-status-log .log-error { color: #dc3545; }
+.sfImageSanitizer-status-log .log-debug { color: #888; font-style: italic; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.sfImageSanitizer-hex-preview {
+    height: 60px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 0.75em;
+    line-height: 1.5;
+    word-break: break-all;
+    overflow: hidden;
+    text-align: left;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.sfImageSanitizer-progress-controls {
+    display: none; /* JS로 제어 */
+    padding: 15px 0 0 0; /* 위쪽 여백만 설정 */
+    flex-shrink: 0;
+}
+
+.sfImageSanitizer-progress-controls button {
+    width: 100%; /* 버튼이 하나이므로 꽉 채움 */
+    padding: 12px;
+    font-family: 'D2Coding', monospace;
+    font-size: 1em;
+    border: 1px solid #555;
+    background-color: #333;
+    color: #ddd;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.sfImageSanitizer-progress-controls button:hover {
+    background-color: #444;
+}
+
+/* ==========================================================================
+   6. 모바일 반응형 스타일
+   ========================================================================== */
+
+@media (max-width: 600px) {
+    #sfImageSanitizer-container,
+    #sfImageSanitizer-results-container {
+        padding: 10px; /* 모바일에서는 전체 패딩을 줄임 */
+    }
+
+    /* 모바일에서는 섬네일과 정보 영역을 세로로 쌓음 */
+    .sfImageSanitizer-result-item {
+        flex-direction: column;
+    }
+
+    .result-thumbnail {
+        width: 100%; /* 가로로 꽉 채움 */
+        height: 150px; /* 높이 고정 */
+    }
+}

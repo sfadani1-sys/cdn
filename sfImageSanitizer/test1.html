@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디지털 도트 파일 스캐너</title>
+    <style>
+        /* 페이지 전체 스타일링 */
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a; /* 어두운 배경으로 디지털 느낌 강조 */
+        }
+
+        /* 드래그 앤 드롭 영역의 기본 스타일 */
+        #drop-zone {
+            width: 500px;
+            height: 300px;
+            border: 3px dashed #555; /* 어두운 테마에 맞는 점선 */
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: #888;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+            position: relative; /* 자식 요소의 위치 기준이 됨 */
+            overflow: hidden; /* 내부 요소가 영역을 벗어나면 숨김 */
+            background-color: #2b2b2b; /* 어두운 박스 배경 */
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); /* 약간의 네온 효과 */
+        }
+
+        /* 파일이 드롭 영역 위로 드래그 되었을 때의 스타일 */
+        #drop-zone.drag-over {
+            border-color: #00ffff; /* 시안(Cyan) 색상으로 활성화 피드백 */
+            color: #00ffff;
+            background-color: #333;
+        }
+
+        /* 파일 선택 후 '스캔 중' 상태가 되었을 때의 스타일 */
+        #drop-zone.scanning {
+            border-style: solid; /* 테두리를 실선으로 변경 */
+            border-color: #00ffff;
+            cursor: default; /* 스캔 중에는 커서를 기본값으로 변경 */
+            background-color: #111; /* 스캔 중에는 더 어둡게 하여 도트 강조 */
+        }
+
+        /* 파일 선택 안내 메시지 스타일 */
+        #drop-zone .prompt-message {
+            transition: opacity 0.3s ease; /* 투명도 변화를 부드럽게 */
+            z-index: 2; /* 다른 요소들 위에 있도록 설정 */
+            position: relative;
+        }
+
+        /* 스캔 중일 때 안내 메시지를 숨김 */
+        #drop-zone.scanning .prompt-message {
+            opacity: 0;
+        }
+        
+        /* 숨겨진 실제 파일 입력(input) 요소 */
+        #file-input {
+            display: none;
+        }
+
+        /* 디지털 도트들을 담을 그리드 컨테이너 */
+        .dot-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex; /* flexbox를 사용하여 도트들을 정렬 */
+            flex-wrap: wrap; /* 도트들이 가로로 꽉 차면 다음 줄로 넘김 */
+            justify-content: center;
+            align-items: center;
+            padding: 10px; /* 내부 여백 */
+            box-sizing: border-box; /* 패딩이 크기에 영향을 주지 않도록 설정 */
+            opacity: 0; /* 기본적으로 숨김 */
+            transition: opacity 0.5s ease;
+        }
+
+        /* 스캔 중일 때 도트 그리드를 보여줌 */
+        #drop-zone.scanning .dot-grid {
+            opacity: 1;
+        }
+
+        /* 개별 디지털 도트의 스타일 */
+        .dot {
+            width: 10px;
+            height: 10px;
+            background-color: #333; /* 비활성화 상태의 도트 색상 */
+            margin: 2px;
+            /* 도트 색상 변경 시 부드러운 전환 효과 */
+            transition: background-color 0.1s ease-in-out; 
+        }
+
+        /* 활성화된 (스캔이 진행된) 도트의 스타일 */
+        .dot.active {
+            background-color: #00ffff; /* 활성화된 도트의 시안 색상 */
+            box-shadow: 0 0 5px #00ffff; /* 네온 효과 */
+        }
+        
+        /* 스캔 완료 시 도트의 스타일 */
+        .dot.done {
+            background-color: #00ff00; /* 완료 시 녹색 */
+            box-shadow: 0 0 5px #00ff00;
+        }
+
+        /* 파일 이름과 진행 상태를 표시하는 텍스트 */
+        .status-text {
+            position: absolute; /* drop-zone 중앙에 위치시키기 위해 절대 위치 사용 */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* 정확한 중앙 정렬 */
+            font-size: 1.2em;
+            color: #fff;
+            font-weight: bold;
+            background-color: rgba(0, 0, 0, 0.5); /* 텍스트 가독성을 위한 반투명 배경 */
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 3; /* 항상 최상단에 보이도록 설정 */
+            opacity: 0; /* 기본적으로 숨김 */
+            transition: opacity 0.3s ease;
+            pointer-events: none; /* 텍스트가 마우스 이벤트를 가로채지 않도록 함 */
+        }
+        
+        /* 스캔 중일 때 상태 텍스트를 보여줌 */
+        #drop-zone.scanning .status-text {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 파일을 드래그 앤 드롭할 영역 -->
+    <div id="drop-zone">
+        <!-- 파일 선택 안내 메시지 -->
+        <div class="prompt-message">
+            <p>스캔할 파일을 여기에 드래그 앤 드롭하세요</p>
+            <p>또는 이 영역을 클릭하여 파일을 선택하세요</p>
+        </div>
+
+        <!-- 숨겨진 파일 입력 필드 -->
+        <input type="file" id="file-input">
+        
+        <!-- 디지털 도트가 생성될 그리드 영역 -->
+        <div class="dot-grid"></div>
+        
+        <!-- 스캔 상태 메시지를 표시할 요소 -->
+        <p class="status-text"></p>
+    </div>
+
+    <script>
+        // 필요한 HTML 요소들을 변수에 할당
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const dotGrid = document.querySelector('.dot-grid');
+        const statusText = document.querySelector('.status-text');
+
+        // 파일 스캔이 진행 중인지 상태를 관리하는 변수
+        let isScanning = false;
+        let dots = []; // 생성된 도트 DOM 요소를 저장할 배열
+
+        /**
+         * 디지털 도트를 생성하고 화면에 배치하는 함수
+         */
+        function createDots() {
+            // 기존 도트들을 모두 제거
+            dotGrid.innerHTML = '';
+            dots = [];
+
+            const dropZoneRect = dropZone.getBoundingClientRect(); // 드롭 영역의 크기와 위치 정보
+            const dotSize = 10; // 도트의 너비/높이
+            const dotMargin = 2; // 도트 간의 간격
+            const dotTotalSize = dotSize + dotMargin * 2;
+
+            // 드롭 영역에 몇 개의 도트가 들어갈 수 있는지 계산
+            const cols = Math.floor(dropZoneRect.width / dotTotalSize);
+            const rows = Math.floor(dropZoneRect.height / dotTotalSize);
+            const totalDots = cols * rows;
+
+            // 계산된 개수만큼 도트 요소를 생성
+            for (let i = 0; i < totalDots; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('dot');
+                dotGrid.appendChild(dot);
+                dots.push(dot); // 배열에 추가하여 나중에 제어할 수 있도록 함
+            }
+        }
+
+        // --- 이벤트 리스너 설정 (이전과 거의 동일) ---
+        dropZone.addEventListener('click', () => !isScanning && fileInput.click());
+        fileInput.addEventListener('change', (e) => e.target.files.length && handleFile(e.target.files[0]));
+        dropZone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); !isScanning && dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); !isScanning && dropZone.classList.remove('drag-over'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isScanning) return;
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+        
+        // 창 크기가 변경될 때마다 도트를 다시 계산하여 배치 (반응형 대응)
+        window.addEventListener('resize', createDots);
+
+        /**
+         * 선택되거나 드롭된 파일을 처리하는 메인 함수
+         * @param {File} file - 처리할 파일 객체
+         */
+        function handleFile(file) {
+            if (!file || isScanning) return;
+            isScanning = true;
+            dropZone.classList.add('scanning');
+            
+            // 실제 파일 읽기 (바이너리 스캔)
+            const reader = new FileReader();
+            reader.onload = (e) => console.log(`파일 읽기 완료! 크기: ${e.target.result.byteLength} 바이트`);
+            reader.readAsArrayBuffer(file);
+            
+            // 시각적 효과를 위한 디지털 도트 스캔 시뮬레이션 시작
+            simulateDotProgress(file.name);
+        }
+
+        /**
+         * 디지털 도트 프로그레스 바 애니메이션을 시뮬레이션하는 함수
+         * @param {string} fileName - 완료 메시지에 표시할 파일 이름
+         */
+        function simulateDotProgress(fileName) {
+            let currentIndex = 0;
+            const totalDots = dots.length;
+            const totalDuration = 2000; // 전체 애니메이션 시간 (2초)
+            const intervalTime = totalDuration / totalDots; // 각 도트가 활성화되는 간격
+
+            statusText.textContent = `파일 분석 중: ${fileName}`;
+
+            const interval = setInterval(() => {
+                // 현재 인덱스의 도트에 'active' 클래스를 추가하여 색상을 변경
+                if (dots[currentIndex]) {
+                    dots[currentIndex].classList.add('active');
+                }
+                currentIndex++;
+
+                // 모든 도트가 활성화되었을 때 (100% 진행)
+                if (currentIndex >= totalDots) {
+                    clearInterval(interval); // 반복 중단
+                    
+                    // 완료 상태로 전환
+                    statusText.textContent = `"${fileName}" 스캔 완료!`;
+                    dots.forEach(dot => {
+                        dot.classList.remove('active'); // 기존 active 클래스 제거
+                        dot.classList.add('done'); // 'done' 클래스 추가하여 녹색으로 변경
+                    });
+                    
+                    // 2초 후에 초기 상태로 리셋
+                    setTimeout(resetDropZone, 2000);
+                }
+            }, intervalTime);
+        }
+        
+        /**
+         * 드롭 영역을 초기 상태로 되돌리는 함수
+         */
+        function resetDropZone() {
+            isScanning = false;
+            dropZone.classList.remove('scanning');
+            // 모든 도트의 활성화/완료 상태를 제거
+            dots.forEach(dot => {
+                dot.classList.remove('active');
+                dot.classList.remove('done');
+            });
+            fileInput.value = ''; // 같은 파일을 다시 선택할 수 있도록 초기화
+        }
+
+        // 페이지가 로드되면 초기에 한 번 도트를 생성
+        createDots();
+
+    </script>
+</body>
+</html>

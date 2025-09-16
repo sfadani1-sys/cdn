@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일 드래그 앤 드롭 스캐너</title>
+    <style>
+        /* 페이지 전체 스타일링 */
+        body {
+            font-family: 'Malgun Gothic', sans-serif; /* 가독성 좋은 한글 폰트 설정 */
+            display: flex; /* 자식 요소를 중앙 정렬하기 위해 flexbox 사용 */
+            justify-content: center; /* 수평 중앙 정렬 */
+            align-items: center; /* 수직 중앙 정렬 */
+            height: 100vh; /* 뷰포트 전체 높이 사용 */
+            margin: 0;
+            background-color: #f0f2f5; /* 부드러운 배경색 */
+        }
+
+        /* 드래그 앤 드롭 영역의 기본 스타일 */
+        #drop-zone {
+            width: 500px;
+            height: 300px;
+            border: 3px dashed #ccc; /* 점선 테두리로 드롭 영역임을 표시 */
+            border-radius: 15px; /* 모서리를 둥글게 */
+            display: flex; /* 내부 요소들을 정렬하기 위해 flexbox 사용 */
+            flex-direction: column; /* 자식 요소들을 세로로 쌓음 */
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: #aaa;
+            font-size: 1.2em;
+            cursor: pointer; /* 마우스 커서를 포인터로 변경하여 클릭 가능함을 암시 */
+            transition: all 0.3s ease-in-out; /* 모든 속성 변화를 부드럽게 처리 */
+            position: relative; /* 자식 요소의 위치 기준이 됨 */
+            overflow: hidden; /* 내부 요소가 영역을 벗어나면 숨김 */
+            background-color: #ffffff;
+        }
+
+        /* 파일이 드롭 영역 위로 드래그 되었을 때의 스타일 */
+        #drop-zone.drag-over {
+            border-color: #4a90e2; /* 테두리 색상 변경으로 시각적 피드백 */
+            color: #4a90e2;
+            background-color: #e9f2fd;
+        }
+
+        /* 파일 선택 후 '스캔 중' 상태가 되었을 때의 스타일 */
+        #drop-zone.scanning {
+            border-style: solid; /* 테두리를 실선으로 변경 */
+            border-color: #4a90e2;
+            cursor: default; /* 스캔 중에는 커서를 기본값으로 변경 */
+        }
+
+        /* 파일 선택 안내 메시지 스타일 */
+        #drop-zone .prompt-message {
+            transition: opacity 0.3s ease; /* 투명도 변화를 부드럽게 */
+        }
+
+        /* 스캔 중일 때 안내 메시지를 숨김 */
+        #drop-zone.scanning .prompt-message {
+            opacity: 0; /* 투명하게 만들어 숨김 */
+        }
+        
+        /* 숨겨진 실제 파일 입력(input) 요소 */
+        #file-input {
+            display: none; /* 화면에 보이지 않게 처리 */
+        }
+
+        /* 프로그레스 바 컨테이너 스타일 */
+        .progress-container {
+            position: absolute; /* drop-zone을 기준으로 절대 위치 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex; /* 내부 프로그레스 바와 텍스트를 정렬 */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0; /* 기본적으로는 숨겨져 있음 (투명) */
+            transition: opacity 0.5s ease;
+            pointer-events: none; /* 이벤트가 통과되도록 하여 아래 요소를 클릭할 수 있게 함 */
+        }
+
+        /* 스캔 중일 때 프로그레스 바 컨테이너를 보여줌 */
+        #drop-zone.scanning .progress-container {
+            opacity: 1;
+        }
+
+        /* 프로그레스 바의 배경 (전체 길이) */
+        .progress-bar {
+            width: 80%; /* drop-zone 너비의 80% 차지 */
+            height: 30px;
+            background-color: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden; /* 내부 바가 밖으로 나가지 않도록 함 */
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); /* 안쪽 그림자 효과 */
+        }
+
+        /* 실제 진행 상태를 보여주는 내부 바 */
+        .progress-bar-inner {
+            width: 0%; /* 초기 너비는 0% */
+            height: 100%;
+            background: linear-gradient(45deg, #4a90e2, #2c6cb5); /* 멋진 그라데이션 효과 */
+            border-radius: 15px;
+            transition: width 0.2s linear; /* 너비 변경 시 부드러운 애니메이션 효과 */
+        }
+        
+        /* 파일 이름과 진행 상태를 표시하는 텍스트 */
+        .status-text {
+            margin-top: 20px;
+            font-size: 1.1em;
+            color: #333;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- 파일을 드래그 앤 드롭할 영역 -->
+    <div id="drop-zone">
+        <!-- 파일 선택 안내 메시지 -->
+        <div class="prompt-message">
+            <p>스캔할 파일을 여기에 드래그 앤 드롭하세요</p>
+            <p>또는 이 영역을 클릭하여 파일을 선택하세요</p>
+        </div>
+
+        <!-- 숨겨진 파일 입력 필드 -->
+        <input type="file" id="file-input">
+        
+        <!-- 스캔 진행 상황을 보여줄 프로그레스 바 영역 -->
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-bar-inner"></div>
+            </div>
+            <p class="status-text"></p>
+        </div>
+    </div>
+
+    <script>
+        // 필요한 HTML 요소들을 변수에 할당
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const progressBarInner = document.querySelector('.progress-bar-inner');
+        const statusText = document.querySelector('.status-text');
+
+        // 파일 스캔이 진행 중인지 상태를 관리하는 변수
+        let isScanning = false;
+
+        // 드롭 영역을 클릭하면 숨겨진 파일 입력 필드를 클릭한 것과 동일하게 동작시킴
+        dropZone.addEventListener('click', () => {
+            // 스캔 중이 아닐 때만 파일 선택 창을 염
+            if (!isScanning) {
+                fileInput.click();
+            }
+        });
+
+        // 파일 입력 필드에 변경이 생겼을 때 (파일이 선택되었을 때)
+        fileInput.addEventListener('change', (e) => {
+            // 선택된 파일 목록을 가져옴
+            const files = e.target.files;
+            // 파일이 하나 이상 선택되었다면 첫 번째 파일을 처리
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // 'dragenter' 이벤트: 파일이 드롭 영역에 처음 들어왔을 때 발생
+        dropZone.addEventListener('dragenter', (e) => {
+            // 브라우저의 기본 동작(예: 파일 열기)을 막음
+            e.preventDefault();
+            e.stopPropagation();
+            // 스캔 중이 아닐 때만 'drag-over' 클래스를 추가하여 시각적 효과를 줌
+            if (!isScanning) {
+                dropZone.classList.add('drag-over');
+            }
+        });
+
+        // 'dragover' 이벤트: 파일이 드롭 영역 위에 머물러 있을 때 계속 발생
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        // 'dragleave' 이벤트: 파일이 드롭 영역을 벗어났을 때 발생
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 스캔 중이 아니면 'drag-over' 클래스를 제거
+            if (!isScanning) {
+                dropZone.classList.remove('drag-over');
+            }
+        });
+
+        // 'drop' 이벤트: 파일이 드롭 영역에 놓였을 때 발생
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 스캔 중이라면 아무 동작도 하지 않음
+            if (isScanning) return;
+
+            // 드래그 중이던 시각적 효과를 제거
+            dropZone.classList.remove('drag-over');
+
+            // 드롭된 파일 목록을 가져옴
+            const files = e.dataTransfer.files;
+            // 파일이 하나 이상 있다면 첫 번째 파일을 처리
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        /**
+         * 선택되거나 드롭된 파일을 처리하는 메인 함수
+         * @param {File} file - 처리할 파일 객체
+         */
+        function handleFile(file) {
+            // 파일이 없거나 이미 스캔 중이면 함수를 종료
+            if (!file || isScanning) return;
+
+            // 스캔 상태로 전환
+            isScanning = true;
+            dropZone.classList.add('scanning'); // CSS 클래스를 추가하여 UI를 변경
+
+            // 상태 텍스트에 파일 이름 표시
+            statusText.textContent = `파일 스캔 중: ${file.name}`;
+            
+            // FileReader 객체를 생성하여 파일 내용을 읽음
+            const reader = new FileReader();
+
+            // 파일 읽기가 완료되었을 때 실행될 콜백 함수
+            reader.onload = function(e) {
+                // e.target.result에 파일의 바이너리 데이터(ArrayBuffer)가 담겨 있음
+                const binaryData = e.target.result;
+                console.log(`파일 읽기 완료! 파일 크기: ${binaryData.byteLength} 바이트`);
+                // 여기서 실제 서버로 파일을 전송하거나 바이너리 데이터를 분석하는 로직을 추가할 수 있습니다.
+            };
+
+            // 파일을 ArrayBuffer 형태로 읽기 시작 (비동기 작업)
+            reader.readAsArrayBuffer(file);
+            
+            // 실제 스캔은 매우 빠르므로, 시각적인 효과를 위해 프로그레스 바 애니메이션을 시뮬레이션
+            simulateProgress(file.name);
+        }
+
+        /**
+         * 프로그레스 바 애니메이션을 시뮬레이션하는 함수
+         * @param {string} fileName - 완료 메시지에 표시할 파일 이름
+         */
+        function simulateProgress(fileName) {
+            let progress = 0;
+            // 20ms마다 프로그레스 바를 업데이트하기 위해 setInterval 사용
+            const interval = setInterval(() => {
+                progress += 1;
+                progressBarInner.style.width = progress + '%'; // 프로그레스 바의 너비를 업데이트
+                
+                // 100%에 도달하면
+                if (progress >= 100) {
+                    clearInterval(interval); // 반복을 중단
+                    statusText.textContent = `"${fileName}" 스캔 완료!`; // 완료 메시지 표시
+                    progressBarInner.style.backgroundColor = '#28a745'; // 성공을 의미하는 녹색으로 변경
+                    
+                    // (선택사항) 2초 후에 초기 상태로 리셋
+                    setTimeout(resetDropZone, 2000);
+                }
+            }, 20); // 20ms 간격으로 실행 (20ms * 100 = 2초 소요)
+        }
+        
+        /**
+         * 드롭 영역을 초기 상태로 되돌리는 함수
+         */
+        function resetDropZone() {
+            isScanning = false;
+            dropZone.classList.remove('scanning');
+            progressBarInner.style.width = '0%';
+            // 색상도 원래 그라데이션으로 되돌려야 하지만, 간단하게 하기 위해 CSS 클래스 제거만으로 처리
+            // 좀 더 확실하게 하려면 아래 코드 추가
+            progressBarInner.style.backgroundColor = ''; 
+            fileInput.value = ''; // 파일 입력 값 초기화 (같은 파일을 다시 선택할 수 있도록)
+        }
+
+    </script>
+</body>
+</html>

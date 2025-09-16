@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 컬러 스캐너</title>
+    <style>
+        /* 페이지 전체 스타일링 */
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+        }
+
+        /* 드래그 앤 드롭 영역의 기본 스타일 */
+        #drop-zone {
+            width: 500px;
+            height: 300px;
+            border: 3px dashed #555;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: #888;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.3s ease-in-out;
+            position: relative;
+            overflow: hidden;
+            background-color: #2b2b2b;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+        }
+
+        /* 파일이 드롭 영역 위로 드래그 되었을 때의 스타일 */
+        #drop-zone.drag-over {
+            border-color: #00ffff;
+            color: #00ffff;
+            background-color: #333;
+        }
+
+        /* 스캔 중 상태 스타일 */
+        #drop-zone.scanning {
+            border-style: solid;
+            border-color: #00ffff;
+            cursor: default;
+            background-color: #111;
+        }
+
+        /* 파일 선택 안내 메시지 */
+        #drop-zone .prompt-message {
+            transition: opacity 0.3s ease;
+            z-index: 2;
+            position: relative;
+        }
+
+        /* 스캔 중일 때 안내 메시지를 숨김 */
+        #drop-zone.scanning .prompt-message {
+            opacity: 0;
+        }
+        
+        /* 숨겨진 실제 파일 입력(input) 요소 */
+        #file-input {
+            display: none;
+        }
+
+        /* 디지털 도트 그리드 컨테이너 */
+        .dot-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-sizing: border-box;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        /* 스캔 중일 때 도트 그리드를 보여줌 */
+        #drop-zone.scanning .dot-grid {
+            opacity: 1;
+        }
+
+        /* 개별 디지털 도트의 스타일 */
+        .dot {
+            width: 10px;
+            height: 10px;
+            background-color: #333; /* 비활성화 상태의 도트 색상 */
+            margin: 2px;
+            /* 색상 변경 시 부드러운 전환 효과 */
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        
+        /* 파일 이름과 진행 상태를 표시하는 텍스트 */
+        .status-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2em;
+            color: #fff;
+            font-weight: bold;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 3;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+        
+        /* 스캔 중일 때 상태 텍스트를 보여줌 */
+        #drop-zone.scanning .status-text {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="drop-zone">
+        <div class="prompt-message">
+            <p>스캔할 이미지 파일을 여기에 드래그 앤 드롭하세요</p>
+            <p>또는 이 영역을 클릭하여 파일을 선택하세요</p>
+        </div>
+        <input type="file" id="file-input" accept="image/*"> <!-- 이미지 파일만 받도록 accept 속성 추가 -->
+        <div class="dot-grid"></div>
+        <p class="status-text"></p>
+    </div>
+
+    <script>
+        // 필요한 HTML 요소들을 변수에 할당
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const dotGrid = document.querySelector('.dot-grid');
+        const statusText = document.querySelector('.status-text');
+
+        let isScanning = false;
+        let dots = []; // 도트 DOM 요소를 저장할 배열
+
+        /**
+         * 디지털 도트를 생성하고 화면에 배치하는 함수
+         */
+        function createDots() {
+            dotGrid.innerHTML = '';
+            dots = [];
+            const dropZoneRect = dropZone.getBoundingClientRect();
+            const dotSize = 10, dotMargin = 2, dotTotalSize = dotSize + dotMargin * 2;
+            const cols = Math.floor(dropZoneRect.width / dotTotalSize);
+            const rows = Math.floor(dropZoneRect.height / dotTotalSize);
+            for (let i = 0; i < cols * rows; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('dot');
+                dotGrid.appendChild(dot);
+                dots.push(dot);
+            }
+        }
+
+        // --- 이벤트 리스너 설정 (이전과 동일) ---
+        dropZone.addEventListener('click', () => !isScanning && fileInput.click());
+        fileInput.addEventListener('change', (e) => e.target.files.length && handleFile(e.target.files[0]));
+        dropZone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); !isScanning && dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+        dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); !isScanning && dropZone.classList.remove('drag-over'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            if (isScanning) return;
+            dropZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+        window.addEventListener('resize', createDots);
+
+        /**
+         * 선택된 파일을 처리하는 메인 함수
+         * @param {File} file - 처리할 파일 객체
+         */
+        function handleFile(file) {
+            if (!file || isScanning) return;
+            
+            // 파일 타입이 이미지인지 확인
+            if (!file.type.startsWith('image/')) {
+                alert('이미지 파일만 지원됩니다.');
+                return;
+            }
+
+            isScanning = true;
+            dropZone.classList.add('scanning');
+            
+            // FileReader를 사용하여 이미지를 Data URL로 읽어옴
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // 이미지가 로드되면, 이미지에서 색상 팔레트를 추출
+                extractPalette(e.target.result, (palette) => {
+                    // 팔레트 추출이 완료되면 스캔 애니메이션 시작
+                    simulateDotProgress(file.name, palette);
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        /**
+         * 이미지 URL로부터 색상 팔레트를 추출하는 함수
+         * @param {string} imageUrl - 이미지의 Data URL
+         * @param {function} callback - 팔레트 추출 완료 후 실행될 콜백 함수
+         */
+        function extractPalette(imageUrl, callback) {
+            const palette = new Set(); // 중복된 색상을 자동으로 제거하기 위해 Set 사용
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; // CORS 정책 관련 문제 방지
+            
+            img.onload = function() {
+                // 눈에 보이지 않는 캔버스를 메모리에 생성
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 캔버스 크기를 이미지 크기와 동일하게 설정
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                // 캔버스에 이미지를 그림
+                ctx.drawImage(img, 0, 0);
+                
+                // 캔버스의 픽셀 데이터를 가져옴. [R, G, B, A, R, G, B, A, ...] 형태의 배열
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                
+                // 이미지의 여러 위치에서 색상을 샘플링 (성능을 위해 100개만)
+                for (let i = 0; i < 100; i++) {
+                    // 이미지의 랜덤한 위치(x, y)를 선택
+                    const randomX = Math.floor(Math.random() * canvas.width);
+                    const randomY = Math.floor(Math.random() * canvas.height);
+                    
+                    // 해당 위치의 픽셀 데이터 인덱스를 계산 (한 픽셀은 4개의 값(RGBA)을 가짐)
+                    const pixelIndex = (randomY * canvas.width + randomX) * 4;
+                    
+                    const r = imageData[pixelIndex];
+                    const g = imageData[pixelIndex + 1];
+                    const b = imageData[pixelIndex + 2];
+                    
+                    // 추출한 RGB 값을 CSS 색상 문자열로 변환하여 Set에 추가
+                    palette.add(`rgb(${r}, ${g}, ${b})`);
+                }
+                
+                // Set을 배열로 변환하여 콜백 함수에 전달
+                const finalPalette = Array.from(palette);
+                // 만약 색상을 하나도 추출하지 못했다면 기본 색상 팔레트를 사용
+                if (finalPalette.length === 0) {
+                    finalPalette.push('#00ffff', '#ff00ff', '#ffff00');
+                }
+                callback(finalPalette);
+            };
+            
+            img.src = imageUrl;
+        }
+
+        /**
+         * 디지털 도트 프로그레스 애니메이션 함수 (색상 팔레트 사용)
+         * @param {string} fileName - 파일 이름
+         * @param {Array<string>} palette - 이미지에서 추출한 색상 팔레트
+         */
+        function simulateDotProgress(fileName, palette) {
+            let currentIndex = 0;
+            const totalDuration = 2000; // 2초
+            const intervalTime = totalDuration / dots.length;
+
+            statusText.textContent = `이미지 분석 중: ${fileName}`;
+
+            const interval = setInterval(() => {
+                if (dots[currentIndex]) {
+                    // 팔레트에서 랜덤한 색상을 선택
+                    const randomColor = palette[Math.floor(Math.random() * palette.length)];
+                    const dot = dots[currentIndex];
+                    
+                    // 도트의 배경색과 그림자 색상을 랜덤 색상으로 설정
+                    dot.style.backgroundColor = randomColor;
+                    dot.style.boxShadow = `0 0 7px ${randomColor}`;
+                }
+                currentIndex++;
+
+                if (currentIndex >= dots.length) {
+                    clearInterval(interval);
+                    statusText.textContent = `"${fileName}" 스캔 완료!`;
+                    
+                    // 완료 상태: 모든 도트를 밝은 녹색으로 변경하여 성공 피드백
+                    dots.forEach(dot => {
+                        dot.style.backgroundColor = '#00ff00';
+                        dot.style.boxShadow = '0 0 7px #00ff00';
+                    });
+                    
+                    setTimeout(resetDropZone, 2000);
+                }
+            }, intervalTime);
+        }
+        
+        /**
+         * 드롭 영역을 초기 상태로 되돌리는 함수
+         */
+        function resetDropZone() {
+            isScanning = false;
+            dropZone.classList.remove('scanning');
+            // 모든 도트의 인라인 스타일(색상, 그림자)을 제거
+            dots.forEach(dot => {
+                dot.style.backgroundColor = '';
+                dot.style.boxShadow = '';
+            });
+            fileInput.value = '';
+        }
+
+        // 페이지 로드 시 도트 생성
+        createDots();
+
+    </script>
+</body>
+</html>
