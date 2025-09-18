@@ -3261,3 +3261,33 @@ class sfImageSanitizer {
     this.ui.clearAllResults();
   }
 }
+
+// 'DOMContentLoaded' 이벤트는 브라우저가 HTML 문서를 완전히 읽고 파싱했을 때 발생합니다.
+document.addEventListener("DOMContentLoaded", () => {
+  // 애플리케이션 전체의 초기 설정을 위한 단일 객체입니다.
+  const appOptions = {
+    ui: {
+      mainContainerId: "#sfImageSanitizer-container",
+      toolbarContainerId: "#sfImageSanitizer-toolbar-container",
+      resultsContainerId: "#sfImageSanitizer-results-container",
+      dropZoneHeight: "250px",
+    },
+    logic: {
+      // [신규] 파일 형식 불일치 시 자동으로 변환하여 분석을 계속할지 여부 (기본값: 활성화)
+      autoConvertFormat: true,
+      debugMode: true,
+      deepDebugMode: false,
+    },
+  };
+
+  // 각 UI 컴포넌트를 독립적인 클래스로부터 생성합니다.
+  const ui = new sfImageSanitizerUI(appOptions);
+  const toolbar = new sfImageSanitizerToolbar(
+    appOptions.ui.toolbarContainerId,
+    appOptions.logic
+  );
+
+  // 메인 컨트롤러(sfImageSanitizer)를 생성할 때, 위에서 만든 ui와 toolbar 객체를
+  // 생성자의 인자로 전달합니다. (의존성 주입)
+  new sfImageSanitizer(ui, toolbar, appOptions);
+});
