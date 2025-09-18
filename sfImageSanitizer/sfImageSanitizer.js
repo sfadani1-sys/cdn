@@ -1,44 +1,169 @@
-// 파일이름: sfImageSanitizer.js
-
 /**
  * @file sfImageSanitizer.js
- * @description 애플리케이션의 핵심 로직 컨트롤러 클래스 파일입니다.
- *
- * [리팩토링]
- * 이 클래스는 이제 여러 파일을 순차적으로 처리하고, 각 파일에 대한 UI 노드(결과 카드)를
- * 개별적으로 제어하는 역할을 합니다. UI 클래스와의 모든 상호작용은 어떤 파일에 대한
- * 작업인지 식별하기 위해 'file' 객체를 키로 사용합니다.
+ * @description 애플리케이션의 핵심 로직 컨트롤러(Controller) 클래스 파일입니다.
  */
 class sfImageSanitizer {
-  constructor(ui, options = {}) {
+  constructor(ui, toolbar, options = {}) {
     this.ui = ui;
+    this.toolbar = toolbar;
     const logicOptions = options.logic || {};
-    this.logger = new sfImageSanitizerLog(logicOptions);
-
-    // [리팩토링] 로거의 출력 콜백은 이제 각 파일을 처리할 때마다 동적으로 설정됩니다.
-    // 초기에는 null로 두거나 기본 콘솔 로거를 설정할 수 있습니다.
-    this.logger.setOutput(null);
-
+    this.autoConvertFormat = logicOptions.autoConvertFormat ?? true;
     this.isAnalyzing = false;
     this.fileQueue = [];
     this.totalFiles = 0;
     this.processedFiles = 0;
+    this.jpegCriticalMarkers = new Set(["SOI", "SOF0", "SOS", "EOI"]);
+    this.logger = new sfImageSanitizerLog(logicOptions);
+    this.metadataAnalyzer = new sfMetadataAnalyzer();
+    this.logger.setOutput(null);
 
+    this.analysisSteps = [
+      {
+        name: "파일 구조 분석",
+        execute: (context) => {
+          const onProgressCallback = (progress, chunkBytes) => {
+            this.ui.updateProgressBar(context.file, progress);
+            this.ui.updateHexPreview(context.file, chunkBytes, null);
+          };
+          return sfFileFormatAnalyzer.analyze(
+            context.file,
+            onProgressCallback,
+            this.logger
+          );
+        },
+        processResult: (result, context) => {
+          context.formatResult = result;
+          if (result.firstChunk)
+            this.ui.updateHexPreview(
+              context.file,
+              result.firstChunk,
+              result.magicNumber
+            );
+          if (result.dimensions)
+            this.ui.updateResolution(
+              context.file,
+              result.dimensions.width,
+              result.dimensions.height
+            );
+          if (result.structuralVerificationWarning) {
+            context.hasWarnings = true;
+            context.reasons.push(result.structuralVerificationWarning);
+            this.logger.warning(result.structuralVerificationWarning);
+          }
+          if (result.isValid) {
+            this.logger.info({
+              key: "파일 형식",
+              value: result.detectedFormat.toUpperCase(),
+            });
+            this.logger.success({
+              key: "유효성",
+              value: "파일 형식 및 확장자가 일치합니다.",
+            });
+          } else {
+            const isMismatch =
+              !result.isExtensionValid && result.detectedFormat;
+            if (isMismatch && this.autoConvertFormat) {
+              this.logger.warning({
+                key: "자동 변환",
+                value: `확장자(.${
+                  result.extension
+                })와 실제 형식(${result.detectedFormat.toUpperCase()})이 달라 자동 변환 후 분석을 계속합니다.`,
+              });
+              context.formatResult.isValid = true;
+              context.correctedFileName = this._getCorrectedFileName(
+                context.file.name,
+                result.detectedFormat
+              );
+              context.hasWarnings = true;
+            } else {
+              context.isSafe = false;
+              context.reasons.push(result.reason);
+              this.logger.error({ key: "오류", value: result.reason });
+            }
+          }
+        },
+      },
+      {
+        name: "메타데이터 분석",
+        execute: (context) =>
+          this.metadataAnalyzer.analyze(
+            context.file,
+            context.formatResult.detectedFormat,
+            this.logger
+          ),
+        processResult: (result, context) => {
+          if (result.skipped) {
+            this.logger.info(result.reason);
+            return;
+          }
+          if (result.metadata && result.metadata.length > 0) {
+            result.metadata.forEach((item) => {
+              if (item.isMissing) {
+                if (this.jpegCriticalMarkers.has(item.key)) {
+                  this.logger.error(
+                    `- [${item.key} / ${item.markerHex}] ${item.value} - 없음 (치명적 오류)`
+                  );
+                  context.isSafe = false;
+                  context.reasons.push(
+                    `${item.key} 마커가 누락되어 유효하지 않은 파일입니다.`
+                  );
+                } else {
+                  this.logger.info(
+                    `- [${item.key} / ${item.markerHex}] ${item.value} - 없음`
+                  );
+                }
+                return;
+              }
+              let header = `- [${item.key}${
+                item.markerHex ? ` / ${item.markerHex}` : ""
+              }] ${item.value}`;
+              if (item.offset !== undefined)
+                header += ` (위치: ${item.offset}, 길이: ${
+                  item.length || "N/A"
+                } bytes)`;
+              this.logger.info(header);
+              if (item.details)
+                this.logger.info(
+                  `${item.details
+                    .split("\n")
+                    .map((line) => `  ${line}`)
+                    .join("\n")}`
+                );
+              if (item.rawData && item.rawData.length > 0) {
+                const dataBlockEl = document.createElement("div");
+                dataBlockEl.className = "sfImageSanitizer-log-data-block";
+                dataBlockEl.textContent = this._bytesToHexString(
+                  item.rawData,
+                  64
+                );
+                this.ui.addLogContent(context.file, dataBlockEl);
+              }
+            });
+          }
+          if (result.warnings && result.warnings.length > 0) {
+            context.hasWarnings = true;
+            context.reasons.push(...result.warnings);
+            result.warnings.forEach((w) => this.logger.warning(w));
+          }
+          if (result.errors && result.errors.length > 0) {
+            context.isSafe = false;
+            context.reasons.push(...result.errors);
+            result.errors.forEach((e) => this.logger.error(e));
+          }
+        },
+      },
+    ];
     this._attachEventListeners();
+    this._attachToolbarListeners();
   }
 
-  /**
-   * [리팩토링] 로거로부터 로그 객체를 받아 특정 파일의 UI에 전달하는 콜백 핸들러입니다.
-   * @private
-   * @param {File} file - 로그가 발생한 대상 파일.
-   * @param {object} logObject - 로거가 생성한 로그 객체.
-   */
   _handleLog(file, logObject) {
     this.ui.addLogMessage(file, logObject.message, logObject.level);
   }
 
   _attachEventListeners() {
     const { dropZoneEl, fileInputEl } = this.ui;
+    if (!dropZoneEl || !fileInputEl) return;
     dropZoneEl.addEventListener(
       "click",
       () => !this.isAnalyzing && fileInputEl.click()
@@ -52,12 +177,19 @@ class sfImageSanitizer {
     dropZoneEl.addEventListener("drop", (e) => this._handleDrop(e));
   }
 
+  _attachToolbarListeners() {
+    this.toolbar.onOptionChange((key, value) => {
+      if (key === "debugMode") this.logger.debugMode = value;
+      if (key === "deepDebugMode") this.logger.deepDebugMode = value;
+      if (key === "autoConvertFormat") this.autoConvertFormat = value;
+    });
+  }
+
   _handleDrag(e, isOver) {
     e.preventDefault();
     e.stopPropagation();
-    if (typeof isOver === "boolean" && !this.isAnalyzing) {
+    if (typeof isOver === "boolean" && !this.isAnalyzing)
       this.ui.setDragOverState(isOver);
-    }
   }
 
   _handleDrop(e) {
@@ -70,98 +202,116 @@ class sfImageSanitizer {
 
   handleFiles(files) {
     if (!files || files.length === 0) return;
-
-    // 새로운 파일 세션을 시작하기 전에 이전 결과를 모두 지웁니다.
-    if (!this.isAnalyzing) {
-      this.reset();
-    }
-
-    const newImageFiles = Array.from(files).filter((file) =>
-      file.type.startsWith("image/")
-    );
-    if (newImageFiles.length === 0) return;
-
-    this.fileQueue.push(...newImageFiles);
+    if (!this.isAnalyzing) this.reset();
+    this.fileQueue.push(...Array.from(files));
     this.totalFiles = this.fileQueue.length;
-
-    // 현재 분석 프로세스가 실행 중이 아닐 경우에만 새로 시작합니다.
-    if (!this.isAnalyzing) {
-      this.processFileQueue();
-    }
+    this.ui.fileInputEl.value = "";
+    if (!this.isAnalyzing) this.processFileQueue();
   }
 
-  /**
-   * [핵심 리팩토링]
-   * 파일 큐에 있는 모든 파일을 순차적으로 처리하는 메인 비동기 루프입니다.
-   */
   async processFileQueue() {
     this.isAnalyzing = true;
-
-    // 큐에 파일이 남아있는 동안 계속해서 루프를 돕니다.
     while (this.fileQueue.length > 0) {
-      const currentFile = this.fileQueue.shift(); // 큐에서 다음 파일 가져오기
+      const currentFile = this.fileQueue.shift();
       this.processedFiles++;
-
-      // 1. [UI] 이 파일을 위한 새로운 결과 카드(UI 노드)를 생성하도록 요청합니다.
       this.ui.createResultNode(currentFile);
-
-      const fileCountText = `파일 ${this.processedFiles} / ${this.totalFiles}`;
-      const formattedSize = this._formatFileSize(currentFile.size);
-      const rawBytes = `${currentFile.size.toLocaleString("ko-KR")} bytes`;
-      const fileSizeText = `${formattedSize} (${rawBytes})`;
-
-      // 2. [UI] 생성된 결과 카드의 초기 상태를 설정합니다.
+      const fileSizeText = `${this._formatFileSize(
+        currentFile.size
+      )} (${currentFile.size.toLocaleString("ko-KR")} bytes)`;
       this.ui.setupProgressViews(
         currentFile,
         currentFile.name,
-        fileCountText,
+        `파일 ${this.processedFiles} / ${this.totalFiles}`,
         fileSizeText
       );
-
-      // 3. [Logger] 로거의 출력을 현재 처리 중인 파일의 UI와 연결합니다.
       this.logger.setOutput(this._handleLog.bind(this, currentFile));
 
-      this.logger.info(`초기화...`);
+      const analysisContext = {
+        file: currentFile,
+        isSafe: true,
+        hasWarnings: false,
+        reasons: [],
+        formatResult: null,
+        correctedFileName: null,
+      };
 
-      try {
-        this.logger.info("색상 팔레트 추출 중...");
-        const palette = await this.extractPaletteForFile(currentFile);
-        this.logger.success("팔레트 추출 완료.");
+      for (const step of this.analysisSteps) {
+        if (!analysisContext.isSafe) break;
 
-        // 진행 상황 콜백 정의
-        const onProgressCallback = (progress, chunkBytes) => {
-          this.ui.updateProgressBar(currentFile, progress);
-          this.ui.updateHexPreview(currentFile, chunkBytes, palette);
-        };
+        // [버그 수정] 'analysis'를 올바른 변수명인 'analysisContext'로 수정했습니다.
+        if (
+          step.name === "메타데이터 분석" &&
+          !analysisContext.formatResult?.isValid
+        )
+          break;
 
-        // 파일 분석 실행
-        this.logger.info("파일 스트림 분석 시작...");
-        const result = await sfFileFormatAnalyzer.analyze(
-          currentFile,
-          onProgressCallback,
-          this.logger
-        );
-        this.ui.updateProgressBar(currentFile, 1.0);
-
-        // 결과 처리
-        if (result.isValid) {
-          this.logger.success(`형식 감지: ${result.format.toUpperCase()}`);
-          this.logger.success("파일이 유효합니다.");
-          this.ui.setFinalState(currentFile, "success");
-          // 4. [UI] 파일이 유효하므로 섬네일을 표시하도록 요청합니다.
-          this.ui.showThumbnail(currentFile);
-        } else {
-          this.logger.error(result.reason);
-          this.ui.setFinalState(currentFile, "error");
+        this.ui.addAnalysisStep(currentFile, step.name);
+        try {
+          const result = await step.execute(analysisContext);
+          step.processResult(result, analysisContext);
+        } catch (error) {
+          analysisContext.isSafe = false;
+          analysisContext.reasons.push(
+            `'${step.name}' 단계에서 오류 발생: ${error.message}`
+          );
+          this.logger.error(
+            `'${step.name}' 단계에서 예외 발생: ${error.message}`
+          );
+          break;
         }
-      } catch (error) {
-        this.logger.error(error.toString());
+      }
+
+      this.ui.updateProgressBar(currentFile, 1.0);
+
+      if (analysisContext.isSafe) {
+        if (analysisContext.hasWarnings) {
+          this.ui.showFinalResultMessage(
+            currentFile,
+            "분석 완료. 확인이 필요한 주의 항목이 있습니다.",
+            "warning"
+          );
+          this.ui.setFinalState(currentFile, "warning");
+        } else {
+          this.ui.showFinalResultMessage(
+            currentFile,
+            "모든 분석 단계 통과. 안전한 파일입니다.",
+            "success"
+          );
+          this.ui.setFinalState(currentFile, "success");
+        }
+        const downloadName =
+          analysisContext.correctedFileName || currentFile.name;
+        this.ui.showThumbnail(currentFile);
+        this.ui.showDownloadButton(currentFile, downloadName);
+      } else {
+        this.ui.showFinalResultMessage(
+          currentFile,
+          "분석 실패. 잠재적 위험 요소가 발견되었습니다.",
+          "error"
+        );
         this.ui.setFinalState(currentFile, "error");
+        this.ui.addAnalysisStep(currentFile, "상세 분석 결과");
+        analysisContext.reasons.forEach((reason) => this.logger.error(reason));
       }
     }
-
-    // 모든 파일 처리가 완료되면 분석 상태를 해제합니다.
     this.isAnalyzing = false;
+  }
+
+  _bytesToHexString(bytes, maxLength = 64) {
+    if (!bytes) return "";
+    const displayLength = Math.min(bytes.length, maxLength);
+    let hexString = "";
+    for (let i = 0; i < displayLength; i++) {
+      hexString += bytes[i].toString(16).padStart(2, "0").toUpperCase() + " ";
+    }
+    if (bytes.length > maxLength) hexString += "...";
+    return hexString.trim();
+  }
+
+  _getCorrectedFileName(originalName, newFormat) {
+    const nameParts = originalName.split(".");
+    nameParts.pop();
+    return `${nameParts.join(".")}.${newFormat}`;
   }
 
   _formatFileSize(bytes) {
@@ -172,68 +322,11 @@ class sfImageSanitizer {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
 
-  extractPaletteForFile(file) {
-    return new Promise((resolve) => {
-      const imageUrl = URL.createObjectURL(file);
-      this.extractPalette(imageUrl, (palette) => {
-        URL.revokeObjectURL(imageUrl);
-        resolve(palette);
-      });
-    });
-  }
-
-  extractPalette(imageUrl, callback) {
-    const palette = new Set();
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      ).data;
-      for (let i = 0; i < 100; i++) {
-        const pixelIndex =
-          (Math.floor(Math.random() * canvas.height) * canvas.width +
-            Math.floor(Math.random() * canvas.width)) *
-          4;
-        const [r, g, b] = [
-          imageData[pixelIndex],
-          imageData[pixelIndex + 1],
-          imageData[pixelIndex + 2],
-        ];
-        palette.add(`rgb(${r}, ${g}, ${b})`);
-      }
-      let finalPalette = Array.from(palette);
-      if (finalPalette.length === 0)
-        finalPalette = ["#e0e0e0", "#cccccc", "#b0b0b0"];
-      callback(finalPalette);
-    };
-    img.onerror = () => {
-      this.logger.error(
-        "이미지 로드 실패. 파일이 손상되었거나 지원하지 않는 형식일 수 있습니다."
-      );
-      callback(["#e0e0e0", "#cccccc", "#b0b0b0"]);
-    };
-    img.src = imageUrl;
-  }
-
-  /**
-   * [리팩토링] 애플리케이션 상태와 UI를 완전히 초기 상태로 되돌립니다.
-   * 새로운 파일 세션을 시작할 때 호출됩니다.
-   */
   reset() {
     this.isAnalyzing = false;
     this.fileQueue = [];
     this.totalFiles = 0;
     this.processedFiles = 0;
-    // UI에게 모든 결과 카드를 지우도록 요청합니다.
     this.ui.clearAllResults();
   }
 }

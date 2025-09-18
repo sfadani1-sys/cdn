@@ -64,32 +64,9 @@
     <!-- 1. 외부 라이브러리 (가장 먼저 로드) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script> <!-- sfMetadataAnalyzer.js가 사용 -->
 
-    <!-- 2. 내부 유틸리티 및 분석기 모듈 (의존성 최하위부터 상위 순으로) -->
-    <script src="sfFileFormatValidator.js"></script>  <!-- (의존성 없음) 저수준 바이트 검증 유틸리티 -->
-    <script src="sfFileFormatAnalyzer.js"></script>     <!-- (Validator에 의존) 파일 분석 서비스 -->
-    
-    <!-- 2.1. 전문 스캐너 그룹 (sfMetadataAnalyzer보다 먼저 로드되어야 함) -->
-    <script src="sfMetaScannerJpeg.js"></script>       <!-- JPEG 마커 스캐너 -->
-    <script src="sfMetaScannerPng.js"></script>        <!-- PNG 청크 스캐너 -->
-    <script src="sfMetaScannerGif.js"></script>        <!-- GIF 블록 스캐너 -->
-    <script src="sfMetaScannerSvg.js"></script>        <!-- SVG 콘텐츠 스캐너 -->
-    <script src="sfMetaScannerWebp.js"></script>       <!-- WebP 청크 스캐너 -->
-    <script src="sfMetaScannerTiff.js"></script>       <!-- TIFF 태그 스캐너 -->
-    <script src="sfMetaScannerBmp.js"></script>        <!-- BMP 헤더 스캐너 -->
-    <script src="sfMetaScannerIco.js"></script>        <!-- ICO 디렉토리 스캐너 -->
-    <script src="sfMetaScannerAvif.js"></script>       <!-- AVIF 박스 스캐너 -->
-    <script src="sfMetaScannerHeic.js"></script>       <!-- HEIC 박스 스캐너 -->
-    <script src="sfMetaScannerJp2.js"></script>        <!-- JPEG 2000 박스 스캐너 -->
-
-    <script src="sfMetadataAnalyzer.js"></script>    <!-- (exif.min.js, 모든 스캐너에 의존) 메타데이터 분석 디스패처 -->
-    
-    <!-- 3. 핵심 서비스 및 UI 모듈 -->
-    <script src="sfImageSanitizerLog.js"></script>      <!-- (독립적) 중앙 로그 관리 서비스 -->
-    <script src="sfImageSanitizerUI.js"></script>       <!-- (독립적) 결과 카드 UI 뷰 -->
-    <script src="sfImageSanitizerToolbar.js"></script>  <!-- (독립적) 툴바 UI 뷰 -->
-    
+  
     <!-- 4. 메인 컨트롤러 (위의 모든 모듈을 사용하므로 가장 마지막에 로드) -->
-    <script src="sfImageSanitizer.js"></script>
+    <script src="sfImageSanitizer-max.js"></script>
 
     <!-- ==========================================================================
        애플리케이션 실행 스크립트 (부트스트래핑)
